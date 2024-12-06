@@ -2,8 +2,8 @@ use glam::IVec2;
 use itertools::iproduct;
 use nom::branch::alt;
 use nom::character::complete::char;
+use nom::combinator::value;
 use nom::multi::separated_list0;
-use nom::Parser;
 use nom::{multi::many0, IResult};
 use std::collections::HashMap;
 
@@ -27,10 +27,10 @@ type LookupChain = Vec<Lookup>;
 
 fn parse_line(input: &str) -> IResult<&str, Vec<Letter>> {
     many0(alt((
-        char('X').map(|_| Letter::X),
-        char('M').map(|_| Letter::M),
-        char('A').map(|_| Letter::A),
-        char('S').map(|_| Letter::S),
+        value(Letter::X, char('X')),
+        value(Letter::M, char('M')),
+        value(Letter::A, char('A')),
+        value(Letter::S, char('S')),
     )))(input)
 }
 
@@ -55,16 +55,37 @@ fn get_p1_lookup_chains(index: IVec2) -> Vec<LookupChain> {
         .collect()
 }
 
-#[rustfmt::skip]
-fn get_p2_lookup_chain(index: IVec2) -> LookupChain {
-    vec![
-        // TODO: Seems that actually, the Ms and Ss can be orientated in any way such that it forms
-        // the X-MAS, not just the specific way in the example, need to check them all...
-        Lookup { value: Letter::M, index: index + IVec2::new(-1, -1) },
-        Lookup { value: Letter::M, index: index + IVec2::new(1, -1) },
-        Lookup { value: Letter::S, index: index + IVec2::new(1, 1) },
-        Lookup { value: Letter::S, index: index + IVec2::new(-1, 1) },
-    ]
+fn get_p2_lookup_chains(index: IVec2) -> Vec<LookupChain> {
+    // Possibilities are all rotation of each other:
+    //
+    // M M S M S S M S
+    //  A   A   A   A
+    // S S S M M M M S
+    let corners = [
+        IVec2::new(-1, -1),
+        IVec2::new(1, -1),
+        IVec2::new(1, 1),
+        IVec2::new(-1, 1),
+    ];
+    let mut letters = [Letter::M, Letter::M, Letter::S, Letter::S];
+
+    let mut chains = Vec::new();
+    for _ in 0..letters.len() {
+        chains.push(
+            letters
+                .iter()
+                .zip(&corners)
+                .map(|(letter, corner)| Lookup {
+                    value: letter.clone(),
+                    index: index + corner,
+                })
+                .collect(),
+        );
+        // Rotating the letters slice whilst keeping the corners fixed performs a right rotation of the XMAS
+        letters.rotate_right(1);
+    }
+
+    chains
 }
 
 fn chain_matches(chain: &LookupChain, grid: &HashMap<IVec2, Letter>) -> bool {
@@ -73,10 +94,6 @@ fn chain_matches(chain: &LookupChain, grid: &HashMap<IVec2, Letter>) -> bool {
             .get(&lookup.index)
             .map_or(true, |letter| *letter != lookup.value)
         {
-            println!(
-                "Found mismatch: {:?} is not {:?}",
-                lookup.index, lookup.value
-            );
             return false;
         }
     }
@@ -124,11 +141,11 @@ pub fn part_two(input: &str) -> Option<u32> {
     for (i, line) in wordsearch.into_iter().enumerate() {
         for (j, letter) in line.into_iter().enumerate() {
             if let Letter::A = letter {
-                println!("Looking at A: {:?}", (i, j));
-                let lookup_chain = get_p2_lookup_chain(IVec2::new(i as i32, j as i32));
-                if chain_matches(&lookup_chain, &grid_lookup) {
-                    println!("Matched {:?} with chain: {:?}", (i, j), lookup_chain);
-                    matches += 1;
+                let lookup_chains = get_p2_lookup_chains(IVec2::new(i as i32, j as i32));
+                for lookup_chain in lookup_chains {
+                    if chain_matches(&lookup_chain, &grid_lookup) {
+                        matches += 1;
+                    }
                 }
             }
         }
