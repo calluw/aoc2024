@@ -11,7 +11,7 @@ use nom::{
 
 advent_of_code::solution!(6);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Tile {
     Floor,
     Obstacle,
@@ -51,15 +51,16 @@ fn determine_guard_path(
         }
 
         guard_path.insert((guard_pos, guard_direction));
-        let next_pos = guard_pos + guard_direction;
         // If its not in the lookup, it's off the grid, so just pretend it's floor
-        let next_tile = grid_lookup.get(&next_pos).unwrap_or(&Tile::Floor);
+        let mut next_tile = grid_lookup
+            .get(&(guard_pos + guard_direction))
+            .unwrap_or(&Tile::Floor);
 
-        match next_tile {
-            // Guard starting position is just another floor tile
-            Tile::Floor | Tile::Guard => (),
-            // Rotation 90 degrees clockwise is (y, -x)
-            Tile::Obstacle => guard_direction = IVec2::new(guard_direction.y, -guard_direction.x),
+        while *next_tile == Tile::Obstacle {
+            guard_direction = IVec2::new(guard_direction.y, -guard_direction.x);
+            next_tile = grid_lookup
+                .get(&(guard_pos + guard_direction))
+                .unwrap_or(&Tile::Floor);
         }
 
         guard_pos += guard_direction;
