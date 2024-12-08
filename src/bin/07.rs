@@ -51,17 +51,19 @@ fn can_make_answer(answer: u64, mut nums: VecDeque<u64>, allow_concat: bool) -> 
     }
 
     if allow_concat {
-        // Take another num, concat them together, then try the same answer again with the stack of
-        // those two replaced with the new concatenated number
-        let mut new_nums = nums.clone();
-        let second_next_num = new_nums.pop_back().unwrap();
-        let concatenated_next_num = format!("{}{}", second_next_num, next_num).parse::<u64>();
-        // It can get too large to parse, in which case just skip
-        if let Ok(concatenated_next_num) = concatenated_next_num {
-            new_nums.push_back(concatenated_next_num);
-            dbg!(answer, &new_nums);
-            if can_make_answer(answer, new_nums, allow_concat) {
-                return true;
+        // Concatenation doesn't just apply to the next pop_back number, but to the whole remainder
+        // of the calculation: so, the concatenation problem just needs to calculate if the
+        // remaining nums can create the current answer with the current operand being considered
+        // right-trimmed from it
+        let mut answer_string = answer.to_string();
+        let next_num_string = next_num.to_string();
+        if answer_string.len() > next_num_string.len() {
+            let split_num = answer_string.split_off(answer_string.len() - next_num_string.len());
+            if split_num == next_num_string {
+                let subanswer_if_concat = answer_string.parse::<u64>().unwrap();
+                if can_make_answer(subanswer_if_concat, nums.clone(), true) {
+                    return true;
+                }
             }
         }
     }
@@ -80,14 +82,16 @@ fn can_make_answer(answer: u64, mut nums: VecDeque<u64>, allow_concat: bool) -> 
 pub fn part_one(input: &str) -> Option<u64> {
     let equations = parse_input(input).unwrap().1;
 
-    Some(
-        equations
-            .into_iter()
-            .map(|e| (e.answer, can_make_answer(e.answer, e.nums, false)))
-            .filter(|(_, works)| *works)
-            .map(|(answer, _)| answer)
-            .sum(),
-    )
+    let mut sum = 0;
+
+    for equation in equations {
+        let valid = can_make_answer(equation.answer, equation.nums, false);
+        if valid {
+            sum += equation.answer;
+        }
+    }
+
+    Some(sum)
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
@@ -98,7 +102,6 @@ pub fn part_two(input: &str) -> Option<u64> {
     for equation in equations {
         let valid = can_make_answer(equation.answer, equation.nums, true);
         if valid {
-            dbg!(&equation.answer);
             sum += equation.answer;
         }
     }
