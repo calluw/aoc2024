@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, iter};
+use std::{
+    collections::{HashSet, VecDeque},
+    iter,
+};
 
 use nom::{character::complete::satisfy, multi::many0, IResult, Parser};
 
@@ -101,7 +104,7 @@ pub fn part_two(input: &str) -> Option<u64> {
     let blocks = parse_blocks(input).unwrap().1;
     let mut id_blocks = Vec::new();
 
-    // Probably have to operate on whole blocks now
+    // Probably have to operate on whole blocks now, so give them IDs
     let mut file_id = 0;
     for block in blocks {
         id_blocks.push(match block {
@@ -114,7 +117,87 @@ pub fn part_two(input: &str) -> Option<u64> {
         });
     }
 
-    None
+    let file_only_blocks: Vec<IdBlock> = id_blocks
+        .iter()
+        .filter(|s| matches!(s, IdBlock::File(_, _)))
+        .cloned()
+        .collect();
+
+    let mut seen_file_ids = HashSet::new();
+
+    let mut compressed_blocks = Vec::new();
+    for block in id_blocks {
+        match block {
+            IdBlock::File(s, id) => {
+                if seen_file_ids.contains(&id) {
+                    // This was either already moved to the left to fill a
+                    // space, so ignore it by pretend its now a space: because
+                    // of the left to right scan, its not possible that this
+                    // space could ever be used to fill something in so it
+                    // doesn't matter
+                    compressed_blocks.push(IdBlock::Free(s));
+                } else {
+                    seen_file_ids.insert(id);
+                    compressed_blocks.push(block);
+                }
+            }
+            IdBlock::Free(s) => {
+                // Attempt to use the free space by backwards-iterating the
+                // available blocks to move in: if we use a block, add it to the
+                // seen IDs so that it isn't later counted as a file and added
+                // to the compressed disk
+                let mut current_space = s;
+                for file_block in file_only_blocks.iter().rev() {
+                    if let IdBlock::File(file_s, id) = file_block {
+                        if seen_file_ids.contains(id) {
+                            // This one was also already substituted elsewhere,
+                            // can't reuse
+                            continue;
+                        }
+                        if *file_s <= current_space {
+                            current_space -= *file_s;
+                            compressed_blocks.push(file_block.clone());
+                            seen_file_ids.insert(*id);
+                        }
+                    } else {
+                        panic!();
+                    }
+                }
+
+                if current_space > 0 {
+                    compressed_blocks.push(IdBlock::Free(current_space));
+                }
+            }
+        }
+    }
+
+    let mut compressed_disk = Vec::new();
+
+    for block in compressed_blocks {
+        match block {
+            IdBlock::Free(s) => {
+                for _ in 0..s {
+                    compressed_disk.push(Space::Empty);
+                }
+            }
+            IdBlock::File(s, id) => {
+                for _ in 0..s {
+                    compressed_disk.push(Space::File(id));
+                }
+            }
+        }
+    }
+
+    Some(
+        compressed_disk
+            .iter()
+            .enumerate()
+            .map(|(i, space)| match space {
+                Space::Empty => 0,
+                Space::File(id) => i as u64 * id,
+            })
+            .sum(),
+    )
 }
 
 #[cfg(test)]
