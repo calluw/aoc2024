@@ -39,13 +39,13 @@ fn parse_blocks(input: &str) -> IResult<&str, Vec<Block>> {
 
 #[derive(Debug, Clone)]
 enum Space {
-    File(u32),
+    File(u64),
     Empty,
 }
 
-pub fn part_one(input: &str) -> Option<u32> {
+pub fn part_one(input: &str) -> Option<u64> {
     let blocks = parse_blocks(input).unwrap().1;
-    let mut disk = VecDeque::new();
+    let mut disk = Vec::new();
 
     let mut file_id = 0;
     for block in blocks {
@@ -59,35 +59,75 @@ pub fn part_one(input: &str) -> Option<u32> {
         });
     }
 
-    //let file_only_spaces: VecDeque<Space> = disk
-    //    .iter()
-    //    .filter(|s| matches!(s, Space::File(_)))
-    //    .cloned()
-    //    .collect();
+    let mut file_only_spaces: VecDeque<u64> = disk
+        .iter()
+        .filter(|s| matches!(s, Space::File(_)))
+        .map(|s| if let Space::File(i) = s { i } else { panic!() })
+        .cloned()
+        .collect();
 
-    let empty_num: usize = disk.iter().filter(|s| matches!(s, Space::Empty)).count();
-    let disk_size = disk.len();
+    let num_file_spaces = file_only_spaces.len();
 
     let mut compressed_disk = Vec::new();
 
-    let mut empty_filled = 0;
-    for space in disk {
+    for (i, space) in disk.into_iter().enumerate() {
+        if i >= num_file_spaces {
+            break;
+        }
         match space {
             Space::File(id) => compressed_disk.push(id),
-            Space::Empty => {}
+            Space::Empty => compressed_disk.push(file_only_spaces.pop_back().unwrap()),
         }
     }
 
-    None
+    assert_eq!(compressed_disk.len(), num_file_spaces);
+
+    Some(
+        compressed_disk
+            .into_iter()
+            .enumerate()
+            .map(|(i, num)| i as u64 * num)
+            .sum(),
+    )
 }
 
-pub fn part_two(input: &str) -> Option<u32> {
+#[derive(Debug, Clone)]
+enum IdBlock {
+    Free(usize),
+    File(usize, u64),
+}
+
+pub fn part_two(input: &str) -> Option<u64> {
+    let blocks = parse_blocks(input).unwrap().1;
+    let mut id_blocks = Vec::new();
+
+    // Probably have to operate on whole blocks now
+    let mut file_id = 0;
+    for block in blocks {
+        id_blocks.push(match block {
+            Block::Free(s) => IdBlock::Free(s),
+            Block::File(s) => {
+                let id_block = IdBlock::File(s, file_id);
+                file_id += 1;
+                id_block
+            }
+        });
+    }
+
     None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_part_one_short_example() {
+        let result = part_one(&advent_of_code::template::read_file_part(
+            "examples", DAY, 0,
+        ));
+        assert_eq!(result, Some(60));
+    }
 
     #[test]
     fn test_part_one() {
@@ -98,6 +138,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let result = part_two(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, None);
+        assert_eq!(result, Some(2858));
     }
 }
